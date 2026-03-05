@@ -1,0 +1,20 @@
+# Arquivos de ambiente (SENHAS)
+.env
+*.env
+.env.local
+
+# Binários do Go
+/api_auth_go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Docker (Se houver dados locais)
+docker/postgres_data/
+
+# Logs e IDEs
+*.log
+.vscode/
+.idea/
