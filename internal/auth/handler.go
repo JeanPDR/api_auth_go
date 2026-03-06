@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-type RegisterRequest struct{
-	Email string `json:"email"`
+type RegisterRequest struct {
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
@@ -15,7 +15,7 @@ type Handler struct {
 	repo *Repository
 }
 
-func NewHandler (repo *Repository) * Handler{
+func NewHandler(repo *Repository) *Handler {
 	return &Handler{repo: repo}
 }
 
@@ -32,7 +32,7 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Email == "" || len(req.Password) < 6 {
-		http.Error(w, "E-mail inválido ou senha muito curta (mínimo 6 caracteres)", http.StatusBadRequest)
+		http.Error(w, "E-mail inválido ou senha muito curta (mínimo de 6 caracteres)", http.StatusBadRequest)
 		return
 	}
 
