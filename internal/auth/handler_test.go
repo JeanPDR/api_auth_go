@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"auth-api/internal/database"
+	"auth-api/internal/mailer"
 
 	"github.com/joho/godotenv"
 )
@@ -26,7 +27,7 @@ func TestRegisterUser(t *testing.T) {
 	}
 	defer db.Close()
 
-	// 1. SETUP: Cria a tabela temporária para garantir que o teste funcione num banco vazio
+	// 1. SETUP: Cria a tabela temporária
 	_, err = db.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS users (
 			id SERIAL PRIMARY KEY,
@@ -42,7 +43,8 @@ func TestRegisterUser(t *testing.T) {
 	}
 
 	repo := NewRepository(db)
-	handler := NewHandler(repo)
+	dummyMailer := &mailer.Mailer{}
+	handler := NewHandler(repo, dummyMailer)
 
 	// --- CENÁRIO 1: Falha por Senha Curta ---
 	t.Run("Deve retornar 400 se a senha for curta", func(t *testing.T) {
@@ -61,7 +63,6 @@ func TestRegisterUser(t *testing.T) {
 
 	// --- CENÁRIO 2: Sucesso no Registo ---
 	t.Run("Deve retornar 201 ao cadastrar utilizador válido", func(t *testing.T) {
-		// Usamos UnixNano para evitar colisões caso o teste rode super rápido
 		emailUnico := fmt.Sprintf("qa_teste_%d@exemplo.com", time.Now().UnixNano())
 		payload := []byte(fmt.Sprintf(`{"email":"%s", "password":"senha_forte_123"}`, emailUnico))
 
