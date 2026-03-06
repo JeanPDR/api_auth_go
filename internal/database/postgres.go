@@ -9,12 +9,8 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// ConnectDB inicializa a conexão e retorna o pool e um possível erro
 func ConnectDB() (*pgxpool.Pool, error) {
-	// Carrega o .env se existir
-	_ = godotenv.Load()
-
-	// Configuração manual para evitar erros com caracteres especiais na senha
+	_ = godotenv.Load(".env", "../.env", "../../.env")
 	config, err := pgxpool.ParseConfig("")
 	if err != nil {
 		return nil, err
