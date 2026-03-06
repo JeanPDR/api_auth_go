@@ -23,8 +23,8 @@ Este projeto tem como objetivo fornecer um serviço robusto e seguro de autentic
 - [X] Estruturação do projeto e rotas iniciais
 - [X] Configuração do banco de dados
 - [X] Implementação do cadastro de usuários (Sign Up)
-- [ ] Implementação do login de usuários (Sign In)
-- [ ] Geração e validação de tokens (JWT)
+- [X] Implementação do login de usuários (Sign In)
+- [X] Geração e validação de tokens (JWT)
 - [X] Criptografia de senhas
 
 ## ⚙️ Como Rodar Localmente (Em breve)
