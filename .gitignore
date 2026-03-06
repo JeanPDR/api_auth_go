@@ -18,3 +18,10 @@ docker/postgres_data/
 *.log
 .vscode/
 .idea/
+
+#terraform
+/terraform/.terraform/
+/terraform/*.tfstate
+/terraform/*.tfstate.backup
+/terraform/*.tfvars
+*.json # Evita subir a chave do Service Account do GCP

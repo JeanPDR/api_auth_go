@@ -1,0 +1,31 @@
+name: Go API CI
+
+# A esteira vai rodar sempre que houver um push na branch main
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  test-and-build:
+    name: Test and Build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22' # Confirme se é a mesma versão do seu go.mod
+
+    - name: Install dependencies
+      run: go mod tidy
+
+    - name: Run Tests
+      run: go test -v ./...
+
+    - name: Build
+      run: go build -o api_auth ./cmd/api
