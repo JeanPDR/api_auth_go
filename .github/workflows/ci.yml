@@ -1,16 +1,32 @@
 name: Go API CI
 
-# A esteira vai rodar sempre que houver um push na branch main
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "main" ]
 
 jobs:
   test-and-build:
     name: Test and Build
     runs-on: ubuntu-latest
+
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+       
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
     - name: Check out code
@@ -19,12 +35,19 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22' # Confirme se é a mesma versão do seu go.mod
+        go-version: '1.22'
 
     - name: Install dependencies
       run: go mod tidy
 
+    # 2. Aqui passamos as variáveis diretamente para o comando de teste
     - name: Run Tests
+      env:
+        DB_USER: testuser
+        DB_PASSWORD: testpassword
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_NAME: testdb
       run: go test -v ./...
 
     - name: Build
