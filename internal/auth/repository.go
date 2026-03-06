@@ -38,3 +38,26 @@ func (r *Repository) Create(ctx context.Context, user *User) error {
 	)
 	return err
 }
+
+func (r *Repository) GetByEmail(ctx context.Context, email string) (*User, error) {
+	query := `
+		SELECT id, email, password_hash, is_verified 
+		FROM users 
+		WHERE email = $1
+	`
+	
+	user := &User{}
+	
+	err := r.db.QueryRow(ctx, query, email).Scan(
+		&user.ID, 
+		&user.Email, 
+		&user.PasswordHash, 
+		&user.IsVerified,
+	)
+	
+	if err != nil {
+		return nil, err 
+	}
+	
+	return user, nil
+}

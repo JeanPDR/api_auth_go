@@ -64,3 +64,64 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		"email":   req.Email,
 	})
 }
+
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "JSON inválido", http.StatusBadRequest)
+		return
+	}
+
+	user, err := h.repo.GetByEmail(r.Context(), req.Email)
+	if err != nil {
+		http.Error(w, "Credenciais inválidas", http.StatusUnauthorized)
+		return
+	}
+
+	if !CheckPasswordHash(req.Password, user.PasswordHash) {
+		http.Error(w, "Credenciais inválidas", http.StatusUnauthorized)
+		return
+	}
+
+	
+	// if !user.IsVerified {
+	// 	http.Error(w, "Por favor, verifique o seu e-mail antes de fazer login", http.StatusForbidden)
+	// 	return
+	// }
+	
+
+	// Sucesso! O usuário provou quem é.
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Login realizado com sucesso!",
+	})
+
+	if !CheckPasswordHash(req.Password, user.PasswordHash) {
+		http.Error(w, "Credenciais inválidas", http.StatusUnauthorized)
+		return
+	}
+
+	tokenString, err := GenerateJWT(user.ID, user.Email)
+	if err != nil {
+		http.Error(w, "Erro interno ao gerar credenciais de acesso", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Login realizado com sucesso!",
+		"token":   tokenString, 
+	})
+}

@@ -26,6 +26,15 @@ func main() {
 
 	http.HandleFunc("/register", authHandler.RegisterUser)
 
+	http.HandleFunc("/login", authHandler.LoginUser)
+
+	http.HandleFunc("/dashboard", auth.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		userID := r.Context().Value(auth.UserIDKey).(string)
+		
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"message": "Bem-vindo ao sistema protegido!", "seu_id": "%s"}`, userID)
+	}))
+
 	fmt.Println("Servidor rodando na porta :8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal(err)
