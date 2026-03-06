@@ -36,16 +36,13 @@ func (m *Mailer) SendConfirmationCode(toEmail string, code string) error {
 		"to": []map[string]string{
 			{"email": toEmail},
 		},
-		"subject": "Seu código de confirmação", // 🚨 ADICIONE ESTA LINHA AQUI
+		"subject":     "Seu código de confirmação",
 		"template_id": m.TemplateID,
-		"variables": []map[string]interface{}{
+		"personalization": []map[string]interface{}{
 			{
 				"email": toEmail,
-				"substitutions": []map[string]string{
-					{
-						"var":   "code",
-						"value": code,
-					},
+				"data": map[string]string{
+					"code": code,
 				},
 			},
 		},

@@ -1,7 +1,9 @@
 package auth
 
 import (
+	"auth-api/internal/mailer"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -11,12 +13,21 @@ type RegisterRequest struct {
 	Password string `json:"password"`
 }
 
-type Handler struct {
-	repo *Repository
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
-func NewHandler(repo *Repository) *Handler {
-	return &Handler{repo: repo}
+type Handler struct {
+	repo   *Repository
+	mailer *mailer.Mailer
+}
+
+func NewHandler(repo *Repository, mailSvc *mailer.Mailer) *Handler {
+	return &Handler{
+		repo:   repo,
+		mailer: mailSvc,
+	}
 }
 
 func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
@@ -57,17 +68,19 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go func() {
+		err := h.mailer.SendConfirmationCode(user.Email, code)
+		if err != nil {
+			fmt.Printf("Erro silencioso ao enviar e-mail para %s: %v\n", user.Email, err)
+		}
+	}()
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Usuário cadastrado com sucesso! Verifique seu e-mail.",
 		"email":   req.Email,
 	})
-}
-
-type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
 }
 
 func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
@@ -93,25 +106,6 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	
-	// if !user.IsVerified {
-	// 	http.Error(w, "Por favor, verifique o seu e-mail antes de fazer login", http.StatusForbidden)
-	// 	return
-	// }
-	
-
-	// Sucesso! O usuário provou quem é.
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Login realizado com sucesso!",
-	})
-
-	if !CheckPasswordHash(req.Password, user.PasswordHash) {
-		http.Error(w, "Credenciais inválidas", http.StatusUnauthorized)
-		return
-	}
-
 	tokenString, err := GenerateJWT(user.ID, user.Email)
 	if err != nil {
 		http.Error(w, "Erro interno ao gerar credenciais de acesso", http.StatusInternalServerError)
@@ -122,6 +116,6 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Login realizado com sucesso!",
-		"token":   tokenString, 
+		"token":   tokenString,
 	})
 }

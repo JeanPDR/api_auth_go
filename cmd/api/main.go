@@ -3,34 +3,34 @@ package main
 import (
 	"auth-api/internal/auth"
 	"auth-api/internal/database"
+	"auth-api/internal/mailer"
 	"fmt"
 	"log"
 	"net/http"
 )
 
 func main() {
-	// Chamada correta recebendo os dois valores de retorno
 	db, err := database.ConnectDB()
 	if err != nil {
 		log.Fatalf("Falha crítica ao conectar no banco: %v", err)
 	}
 	defer db.Close()
 
-	authRepo := auth.NewRepository(db)
-	authHandler := auth.NewHandler(authRepo)
+	mailSvc := mailer.NewMailer()
 
-	// Rota de teste
+	authRepo := auth.NewRepository(db)
+	authHandler := auth.NewHandler(authRepo, mailSvc)
+
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "API Online 🚀")
 	})
 
 	http.HandleFunc("/register", authHandler.RegisterUser)
-
 	http.HandleFunc("/login", authHandler.LoginUser)
 
 	http.HandleFunc("/dashboard", auth.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		userID := r.Context().Value(auth.UserIDKey).(string)
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"message": "Bem-vindo ao sistema protegido!", "seu_id": "%s"}`, userID)
 	}))
