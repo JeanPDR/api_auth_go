@@ -1,4 +1,4 @@
-name: Go API CI
+name: Go API CI/CD
 
 on:
   push:
@@ -11,7 +11,6 @@ jobs:
     name: Test and Build
     runs-on: ubuntu-latest
 
-    
     services:
       postgres:
         image: postgres:15-alpine
@@ -21,7 +20,6 @@ jobs:
           POSTGRES_DB: testdb
         ports:
           - 5432:5432
-       
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -35,12 +33,11 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22'
+        go-version: '1.25'
 
     - name: Install dependencies
       run: go mod tidy
 
-    # 2. Aqui passamos as variáveis diretamente para o comando de teste
     - name: Run Tests
       env:
         DB_USER: testuser
@@ -50,5 +47,28 @@ jobs:
         DB_NAME: testdb
       run: go test -v ./...
 
-    - name: Build
-      run: go build -o api_auth ./cmd/api
+  deploy:
+    name: Deploy para o GCP
+    needs: test-and-build 
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' # 🚨 Só faz deploy se for na branch master
+
+    steps:
+      - name: Deploy para o Google Cloud VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.GCP_HOST }}
+          username: ${{ secrets.GCP_USERNAME }}
+          key: ${{ secrets.GCP_SSH_KEY }}
+          script: |
+            # Entra na pasta do projeto
+            cd ~/api_auth_go
+            
+            # Baixa o código mais recente do GitHub
+            git pull origin master
+            
+            # Reconstrói a API e sobe os containers em background
+            sudo docker compose up --build -d
+            
+            # Limpa imagens antigas do Docker para poupar espaço no Free Tier
+            sudo docker image prune -f

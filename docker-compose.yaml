@@ -2,17 +2,31 @@ services:
   db:
     image: postgres:15-alpine
     container_name: auth_db
-    # O segredo está aqui: aponta para o .env na raiz do projeto
+    restart: always
     env_file:
-      - ../.env 
+      - .env 
     environment:
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
     ports:
-      - "${DB_PORT}:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build: 
+      context: . 
+    container_name: auth_api
+    restart: always
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env 
+    environment:
+      - DB_HOST=db 
+    depends_on:
+      - db 
 
 volumes:
   postgres_data:

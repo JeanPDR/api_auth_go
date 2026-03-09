@@ -1,0 +1,16 @@
+.git
+.gitignore
+
+terraform/
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+api_auth
+api_auth_go
+*.exe
+
+.env
+*.env
+
+README.md
