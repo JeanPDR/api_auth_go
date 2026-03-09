@@ -3,7 +3,6 @@ package auth
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,30 +11,32 @@ import (
 	"auth-api/internal/database"
 	"auth-api/internal/mailer"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
-func TestRegisterUser(t *testing.T) {
+func setupTestDB(t *testing.T) (*pgxpool.Pool, *Repository) {
 	err := godotenv.Load("../../.env")
 	if err != nil {
-		t.Logf("Aviso: não foi possível carregar o ficheiro .env (pode ignorar se estiver no CI/CD)")
+		t.Logf("Aviso: não foi possível carregar o ficheiro .env (pode ignorar no CI)")
 	}
 
 	db, err := database.ConnectDB()
 	if err != nil {
 		t.Fatalf("Falha ao ligar à base de dados no teste: %v", err)
 	}
-	defer db.Close()
 
-	// 1. SETUP: Cria a tabela temporária
 	_, err = db.Exec(context.Background(), `
-		CREATE TABLE IF NOT EXISTS users (
+		DROP TABLE IF EXISTS users;
+		CREATE TABLE users (
 			id SERIAL PRIMARY KEY,
 			email VARCHAR(255) UNIQUE NOT NULL,
 			password_hash TEXT NOT NULL,
 			is_verified BOOLEAN DEFAULT FALSE,
 			verification_code VARCHAR(10),
-			verification_expires_at TIMESTAMP
+			verification_expires_at TIMESTAMP,
+			refresh_token TEXT,
+			refresh_expires_at TIMESTAMP
 		);
 	`)
 	if err != nil {
@@ -43,13 +44,18 @@ func TestRegisterUser(t *testing.T) {
 	}
 
 	repo := NewRepository(db)
+	return db, repo 
+}
+
+func TestRegisterUser(t *testing.T) {
+	db, repo := setupTestDB(t)
+	defer db.Close() 
+
 	dummyMailer := &mailer.Mailer{}
 	handler := NewHandler(repo, dummyMailer)
 
-	// --- CENÁRIO 1: Falha por Senha Curta ---
 	t.Run("Deve retornar 400 se a senha for curta", func(t *testing.T) {
 		payload := []byte(`{"email":"teste@invalido.com", "password":"123"}`)
-
 		req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer(payload))
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
@@ -61,11 +67,8 @@ func TestRegisterUser(t *testing.T) {
 		}
 	})
 
-	// --- CENÁRIO 2: Sucesso no Registo ---
 	t.Run("Deve retornar 201 ao cadastrar utilizador válido", func(t *testing.T) {
-		emailUnico := fmt.Sprintf("qa_teste_%d@exemplo.com", time.Now().UnixNano())
-		payload := []byte(fmt.Sprintf(`{"email":"%s", "password":"senha_forte_123"}`, emailUnico))
-
+		payload := []byte(`{"email":"novo_teste@exemplo.com", "password":"senha_forte_123"}`)
 		req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer(payload))
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
@@ -74,6 +77,38 @@ func TestRegisterUser(t *testing.T) {
 
 		if status := rr.Code; status != http.StatusCreated {
 			t.Errorf("Código de status incorreto: obteve %v, esperava %v. Resposta: %s", status, http.StatusCreated, rr.Body.String())
+		}
+	})
+}
+
+func TestLoginUser(t *testing.T) {
+	db, repo := setupTestDB(t)
+	defer db.Close() 
+
+	dummyMailer := &mailer.Mailer{}
+	handler := NewHandler(repo, dummyMailer)
+
+	// Inserir um utilizador manualmente para o teste
+	hashedPassword, _ := HashPassword("senha_valida_123")
+	userNaoVerificado := &User{
+		Email:            "bloqueado@exemplo.com",
+		PasswordHash:     hashedPassword,
+		VerificationCode: "123456",
+		ExpiresAt:        time.Now().Add(1 * time.Hour),
+		IsVerified:       false, 
+	}
+	_ = repo.Create(context.Background(), userNaoVerificado)
+
+	t.Run("Deve bloquear login (403) se o e-mail não estiver verificado", func(t *testing.T) {
+		payload := []byte(`{"email":"bloqueado@exemplo.com", "password":"senha_valida_123"}`)
+		req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewBuffer(payload))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		handler.LoginUser(rr, req)
+
+		if status := rr.Code; status != http.StatusForbidden {
+			t.Errorf("Esperava bloqueio 403, mas obteve %v. Resposta: %s", status, rr.Body.String())
 		}
 	})
 }
