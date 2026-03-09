@@ -61,3 +61,46 @@ func (r *Repository) GetByEmail(ctx context.Context, email string) (*User, error
 	
 	return user, nil
 }
+
+func (r *Repository) GetUserByEmailForVerification(ctx context.Context, email string) (*User, error) {
+	query := `
+		SELECT id, email, is_verified, verification_code, verification_expires_at 
+		FROM users 
+		WHERE email = $1
+	`
+	
+	user := &User{}
+	err := r.db.QueryRow(ctx, query, email).Scan(
+		&user.ID, 
+		&user.Email, 
+		&user.IsVerified, 
+		&user.VerificationCode, 
+		&user.ExpiresAt,
+	)
+	
+	if err != nil {
+		return nil, err
+	}
+	
+	return user, nil
+}
+
+func (r *Repository) MarkUserAsVerified(ctx context.Context, email string) error {
+	query := `
+		UPDATE users 
+		SET is_verified = TRUE, verification_code = '', verification_expires_at = NOW() 
+		WHERE email = $1
+	`
+	_, err := r.db.Exec(ctx, query, email)
+	return err
+}
+
+func (r *Repository) UpdateVerificationCode(ctx context.Context, email string, code string, expiresAt time.Time) error {
+	query := `
+		UPDATE users 
+		SET verification_code = $1, verification_expires_at = $2 
+		WHERE email = $3
+	`
+	_, err := r.db.Exec(ctx, query, code, expiresAt, email)
+	return err
+}

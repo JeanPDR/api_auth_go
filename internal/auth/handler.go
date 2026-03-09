@@ -18,6 +18,15 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type VerifyRequest struct {
+	Email string `json:"email"`
+	Code  string `json:"code"`
+}
+
+type ResendCodeRequest struct {
+	Email string `json:"email"`
+}
+
 type Handler struct {
 	repo   *Repository
 	mailer *mailer.Mailer
@@ -37,8 +46,10 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "JSON inválido", http.StatusBadRequest)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields() // 🚨 Rejeita JSON com campos extras!
+	if err := decoder.Decode(&req); err != nil {
+		http.Error(w, "JSON inválido ou contém campos não permitidos", http.StatusBadRequest)
 		return
 	}
 
@@ -90,8 +101,10 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "JSON inválido", http.StatusBadRequest)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields() // 🚨 Rejeita JSON com campos extras!
+	if err := decoder.Decode(&req); err != nil {
+		http.Error(w, "JSON inválido ou contém campos não permitidos", http.StatusBadRequest)
 		return
 	}
 
@@ -106,6 +119,11 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !user.IsVerified {
+		http.Error(w, "Por favor, verifique o seu e-mail antes de fazer login.", http.StatusForbidden)
+		return
+	}
+
 	tokenString, err := GenerateJWT(user.ID, user.Email)
 	if err != nil {
 		http.Error(w, "Erro interno ao gerar credenciais de acesso", http.StatusInternalServerError)
@@ -117,5 +135,99 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Login realizado com sucesso!",
 		"token":   tokenString,
+	})
+}
+
+func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req VerifyRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields() 
+	if err := decoder.Decode(&req); err != nil {
+		http.Error(w, "JSON inválido ou contém campos não permitidos", http.StatusBadRequest)
+		return
+	}
+
+	user, err := h.repo.GetUserByEmailForVerification(r.Context(), req.Email)
+	if err != nil {
+		http.Error(w, "Usuário não encontrado", http.StatusNotFound)
+		return
+	}
+
+	if user.IsVerified {
+		http.Error(w, "Este e-mail já foi verificado anteriormente", http.StatusBadRequest)
+		return
+	}
+
+	if user.VerificationCode != req.Code {
+		http.Error(w, "Código de verificação incorreto", http.StatusUnauthorized)
+		return
+	}
+
+	if time.Now().After(user.ExpiresAt) {
+		http.Error(w, "O código de verificação expirou. Solicite um novo.", http.StatusUnauthorized)
+		return
+	}
+
+	if err := h.repo.MarkUserAsVerified(r.Context(), req.Email); err != nil {
+		http.Error(w, "Erro interno ao validar e-mail", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "E-mail verificado com sucesso! Já pode fazer login.",
+	})
+}
+
+func (h *Handler) ResendVerificationCode(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ResendCodeRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields() // 🚨 Rejeita JSON com campos extras!
+	if err := decoder.Decode(&req); err != nil {
+		http.Error(w, "JSON inválido ou contém campos não permitidos", http.StatusBadRequest)
+		return
+	}
+
+	user, err := h.repo.GetUserByEmailForVerification(r.Context(), req.Email)
+	if err != nil {
+		http.Error(w, "Usuário não encontrado", http.StatusNotFound)
+		return
+	}
+
+	if user.IsVerified {
+		http.Error(w, "Este e-mail já foi verificado. Pode fazer login.", http.StatusBadRequest)
+		return
+	}
+
+	newCode := GenerateRandomCode()
+	expiresAt := time.Now().Add(2 * time.Hour)
+
+	if err := h.repo.UpdateVerificationCode(r.Context(), req.Email, newCode, expiresAt); err != nil {
+		http.Error(w, "Erro interno ao atualizar código", http.StatusInternalServerError)
+		return
+	}
+
+	go func() {
+		err := h.mailer.SendConfirmationCode(req.Email, newCode)
+		if err != nil {
+			fmt.Printf("Erro silencioso ao reenviar e-mail para %s: %v\n", req.Email, err)
+		}
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Novo código de verificação enviado com sucesso!",
 	})
 }

@@ -27,6 +27,8 @@ func main() {
 
 	http.HandleFunc("/register", authHandler.RegisterUser)
 	http.HandleFunc("/login", authHandler.LoginUser)
+	http.HandleFunc("/verify", authHandler.VerifyEmail)
+	http.HandleFunc("/verify/resend", authHandler.ResendVerificationCode)
 
 	http.HandleFunc("/dashboard", auth.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		userID := r.Context().Value(auth.UserIDKey).(string)
