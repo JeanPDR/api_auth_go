@@ -38,6 +38,10 @@ type ResetPasswordRequest struct {
 	NewPassword string `json:"new_password"`
 }
 
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 type Handler struct {
 	repo   *Repository
 	mailer *mailer.Mailer
@@ -113,7 +117,7 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 
 	var req LoginRequest
 	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields() // 🚨 Rejeita JSON com campos extras!
+	decoder.DisallowUnknownFields() 
 	if err := decoder.Decode(&req); err != nil {
 		http.Error(w, "JSON inválido ou contém campos não permitidos", http.StatusBadRequest)
 		return
@@ -141,11 +145,24 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	refreshToken, err := GenerateRefreshToken()
+	if err != nil {
+		http.Error(w, "Erro interno ao gerar refresh token", http.StatusInternalServerError)
+		return
+	}
+
+	refreshExpiresAt := time.Now().Add(7 * 24 * time.Hour)
+	if err := h.repo.SaveRefreshToken(r.Context(), user.ID, refreshToken, refreshExpiresAt); err != nil {
+		http.Error(w, "Erro ao salvar sessão", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Login realizado com sucesso!",
-		"token":   tokenString,
+		"message":       "Login realizado com sucesso!",
+		"token":         tokenString,  
+		"refresh_token": refreshToken, 
 	})
 }
 
@@ -331,5 +348,48 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Palavra-passe alterada com sucesso! Já pode fazer login.",
+	})
+}
+
+func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req RefreshRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		http.Error(w, "JSON inválido", http.StatusBadRequest)
+		return
+	}
+
+	user, err := h.repo.GetUserByRefreshToken(r.Context(), req.RefreshToken)
+	if err != nil {
+		http.Error(w, "Refresh token inválido ou não encontrado", http.StatusUnauthorized)
+		return
+	}
+
+	if time.Now().After(user.RefreshExpiresAt) {
+		http.Error(w, "Sessão expirada. Por favor, faça login novamente.", http.StatusUnauthorized)
+		return
+	}
+
+	newToken, err := GenerateJWT(user.ID, user.Email)
+	if err != nil {
+		http.Error(w, "Erro ao gerar novo token de acesso", http.StatusInternalServerError)
+		return
+	}
+
+	newRefreshToken, _ := GenerateRefreshToken()
+	newRefreshExpiresAt := time.Now().Add(7 * 24 * time.Hour)
+	_ = h.repo.SaveRefreshToken(r.Context(), user.ID, newRefreshToken, newRefreshExpiresAt)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"token":         newToken,
+		"refresh_token": newRefreshToken,
 	})
 }

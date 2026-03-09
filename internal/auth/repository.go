@@ -13,6 +13,8 @@ type User struct {
 	IsVerified         bool
 	VerificationCode   string
 	ExpiresAt          time.Time
+	RefreshToken       string   
+	RefreshExpiresAt   time.Time 
 }
 type Repository struct {
 	db *pgxpool.Pool
@@ -113,4 +115,32 @@ func (r *Repository) UpdatePassword(ctx context.Context, email string, newPasswo
 	`
 	_, err := r.db.Exec(ctx, query, newPasswordHash, email)
 	return err
+}
+
+func (r *Repository) SaveRefreshToken(ctx context.Context, userID string, token string, expiresAt time.Time) error {
+	query := `
+		UPDATE users 
+		SET refresh_token = $1, refresh_expires_at = $2 
+		WHERE id = $3
+	`
+	_, err := r.db.Exec(ctx, query, token, expiresAt, userID)
+	return err
+}
+
+func (r *Repository) GetUserByRefreshToken(ctx context.Context, token string) (*User, error) {
+	query := `
+		SELECT id, email, refresh_expires_at 
+		FROM users 
+		WHERE refresh_token = $1
+	`
+	user := &User{}
+	err := r.db.QueryRow(ctx, query, token).Scan(
+		&user.ID, 
+		&user.Email, 
+		&user.RefreshExpiresAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
 }

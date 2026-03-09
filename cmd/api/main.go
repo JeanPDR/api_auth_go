@@ -27,6 +27,7 @@ func main() {
 
 	http.HandleFunc("/register", authHandler.RegisterUser)
 	http.HandleFunc("/login", authHandler.LoginUser)
+	http.HandleFunc("/refresh", authHandler.RefreshToken)
 	http.HandleFunc("/verify", authHandler.VerifyEmail)
 	http.HandleFunc("/verify/resend", authHandler.ResendVerificationCode)
 	http.HandleFunc("/forgot-password", authHandler.ForgotPassword)
