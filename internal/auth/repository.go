@@ -104,3 +104,13 @@ func (r *Repository) UpdateVerificationCode(ctx context.Context, email string, c
 	_, err := r.db.Exec(ctx, query, code, expiresAt, email)
 	return err
 }
+
+func (r *Repository) UpdatePassword(ctx context.Context, email string, newPasswordHash string) error {
+	query := `
+		UPDATE users 
+		SET password_hash = $1, verification_code = '', verification_expires_at = NOW() 
+		WHERE email = $2
+	`
+	_, err := r.db.Exec(ctx, query, newPasswordHash, email)
+	return err
+}

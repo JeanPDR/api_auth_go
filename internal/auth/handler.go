@@ -27,6 +27,17 @@ type ResendCodeRequest struct {
 	Email string `json:"email"`
 }
 
+type ForgotPasswordRequest struct {
+	Email string `json:"email"`
+}
+
+// ResetPasswordRequest JSON esperado para definir a nova senha
+type ResetPasswordRequest struct {
+	Email       string `json:"email"`
+	Code        string `json:"code"`
+	NewPassword string `json:"new_password"`
+}
+
 type Handler struct {
 	repo   *Repository
 	mailer *mailer.Mailer
@@ -229,5 +240,96 @@ func (h *Handler) ResendVerificationCode(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Novo código de verificação enviado com sucesso!",
+	})
+}
+
+func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ForgotPasswordRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		http.Error(w, "JSON inválido", http.StatusBadRequest)
+		return
+	}
+
+	_, err := h.repo.GetUserByEmailForVerification(r.Context(), req.Email)
+	if err != nil {
+		
+		http.Error(w, "Não existe nenhuma conta cadastrada com este e-mail.", http.StatusNotFound)
+		return
+	}
+
+	code := GenerateRandomCode()
+	expiresAt := time.Now().Add(30 * time.Minute)
+
+	if err := h.repo.UpdateVerificationCode(r.Context(), req.Email, code, expiresAt); err != nil {
+		http.Error(w, "Erro interno", http.StatusInternalServerError)
+		return
+	}
+
+	go func() {
+		err := h.mailer.SendPasswordResetCode(req.Email, code)
+		if err != nil {
+			fmt.Printf("Erro silencioso ao enviar e-mail de reset: %v\n", err)
+		}
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Código de recuperação enviado com sucesso para o seu e-mail.",
+	})
+}
+
+func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ResetPasswordRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		http.Error(w, "JSON inválido", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.NewPassword) < 6 {
+		http.Error(w, "A nova senha deve ter pelo menos 6 caracteres", http.StatusBadRequest)
+		return
+	}
+
+	user, err := h.repo.GetUserByEmailForVerification(r.Context(), req.Email)
+	if err != nil {
+		http.Error(w, "Dados incorretos", http.StatusBadRequest)
+		return
+	}
+
+	if user.VerificationCode != req.Code || time.Now().After(user.ExpiresAt) {
+		http.Error(w, "Código inválido ou expirado", http.StatusUnauthorized)
+		return
+	}
+
+	hashedPassword, err := HashPassword(req.NewPassword)
+	if err != nil {
+		http.Error(w, "Erro interno de segurança", http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.repo.UpdatePassword(r.Context(), req.Email, hashedPassword); err != nil {
+		http.Error(w, "Erro ao atualizar a senha", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Palavra-passe alterada com sucesso! Já pode fazer login.",
 	})
 }
