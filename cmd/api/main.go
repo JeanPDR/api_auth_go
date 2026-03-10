@@ -22,7 +22,7 @@ func main() {
 	authHandler := auth.NewHandler(authRepo, mailSvc)
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "API Online 🚀")
+		fmt.Fprint(w, "API Online 2.0 🚀")
 	})
 
 	http.HandleFunc("/register", authHandler.RegisterUser)
