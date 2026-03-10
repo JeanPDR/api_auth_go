@@ -20,7 +20,7 @@ resource "google_compute_firewall" "allow_api" {
 
   allow {
     protocol = "tcp"
-    ports    = ["8080", "22"]
+    ports    = ["80", "443", "8080", "22"]
   }
 
   source_ranges = ["0.0.0.0/0"] # Permite tráfego de qualquer IP
