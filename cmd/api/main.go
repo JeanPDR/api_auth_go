@@ -44,18 +44,24 @@ func main() {
 		fmt.Fprintf(w, `{"message": "Bem-vindo ao sistema protegido!", "seu_id": "%s"}`, userID)
 	}))
 
-	
+	mux.HandleFunc("/me", auth.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"authenticated": true}`))
+	}))
+
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{
-			"http://localhost:4200",         
-			"https://app.seudominio.com.br", 
-			"https://jeanpreis.com.br",      
-			"https://www.jeanpreis.com.br",  
+			"http://localhost:4200",
+			"https://app.seudominio.com.br",
+			"https://jeanpreis.com.br",
+			"https://www.jeanpreis.com.br",
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		AllowCredentials: true,
-		Debug:            false, 
+		Debug:            false,
 	})
 
 	handlerComCors := c.Handler(mux)
