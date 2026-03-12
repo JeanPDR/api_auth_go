@@ -54,7 +54,7 @@ func main() {
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{
 			"http://localhost:4200",
-			"https://app.seudominio.com.br",
+			"https://auth-angular.jeanpreis.com.br",
 			"https://jeanpreis.com.br",
 			"https://www.jeanpreis.com.br",
 		},
