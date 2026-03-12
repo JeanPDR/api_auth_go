@@ -49,6 +49,8 @@ func main() {
 		AllowedOrigins: []string{
 			"http://localhost:4200",         
 			"https://app.seudominio.com.br", 
+			"https://jeanpreis.com.br",      
+			"https://www.jeanpreis.com.br",  
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
