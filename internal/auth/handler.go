@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+	"unicode"
 )
 
 type RegisterRequest struct {
@@ -31,16 +32,12 @@ type ForgotPasswordRequest struct {
 	Email string `json:"email"`
 }
 
-// ResetPasswordRequest JSON esperado para definir a nova senha
 type ResetPasswordRequest struct {
 	Email       string `json:"email"`
 	Code        string `json:"code"`
 	NewPassword string `json:"new_password"`
 }
 
-type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token"`
-}
 
 type Handler struct {
 	repo   *Repository
@@ -62,14 +59,19 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 
 	var req RegisterRequest
 	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields() // 🚨 Rejeita JSON com campos extras!
+	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil {
 		http.Error(w, "JSON inválido ou contém campos não permitidos", http.StatusBadRequest)
 		return
 	}
 
-	if req.Email == "" || len(req.Password) < 6 {
-		http.Error(w, "E-mail inválido ou senha muito curta (mínimo de 6 caracteres)", http.StatusBadRequest)
+	if req.Email == "" {
+		http.Error(w, "E-mail inválido", http.StatusBadRequest)
+		return
+	}
+
+	if !isValidPassword(req.Password) {
+		http.Error(w, "A senha deve ter pelo menos 8 caracteres, incluindo uma letra maiúscula e um caractere especial.", http.StatusBadRequest)
 		return
 	}
 
@@ -117,7 +119,7 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 
 	var req LoginRequest
 	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields() 
+	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil {
 		http.Error(w, "JSON inválido ou contém campos não permitidos", http.StatusBadRequest)
 		return
@@ -157,12 +159,30 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    tokenString,
+		Path:     "/",
+		MaxAge:   7200,
+		HttpOnly: true,
+		Secure:   true, 
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    refreshToken,
+		Path:     "/",
+		MaxAge:   7 * 24 * 3600, 
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"message":       "Login realizado com sucesso!",
-		"token":         tokenString,  
-		"refresh_token": refreshToken, 
+		"message": "Login realizado com sucesso!",
 	})
 }
 
@@ -174,7 +194,7 @@ func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 
 	var req VerifyRequest
 	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields() 
+	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil {
 		http.Error(w, "JSON inválido ou contém campos não permitidos", http.StatusBadRequest)
 		return
@@ -221,7 +241,7 @@ func (h *Handler) ResendVerificationCode(w http.ResponseWriter, r *http.Request)
 
 	var req ResendCodeRequest
 	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields() // 🚨 Rejeita JSON com campos extras!
+	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil {
 		http.Error(w, "JSON inválido ou contém campos não permitidos", http.StatusBadRequest)
 		return
@@ -276,7 +296,6 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 	_, err := h.repo.GetUserByEmailForVerification(r.Context(), req.Email)
 	if err != nil {
-		
 		http.Error(w, "Não existe nenhuma conta cadastrada com este e-mail.", http.StatusNotFound)
 		return
 	}
@@ -317,8 +336,8 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.NewPassword) < 6 {
-		http.Error(w, "A nova senha deve ter pelo menos 6 caracteres", http.StatusBadRequest)
+	if !isValidPassword(req.NewPassword) {
+		http.Error(w, "A nova senha deve ter pelo menos 8 caracteres, incluindo uma letra maiúscula e um caractere especial.", http.StatusBadRequest)
 		return
 	}
 
@@ -357,17 +376,16 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req RefreshRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
-		http.Error(w, "JSON inválido", http.StatusBadRequest)
+	cookie, err := r.Cookie("refresh_token")
+	if err != nil {
+		http.Error(w, "Sessão inválida ou ausente", http.StatusUnauthorized)
 		return
 	}
+	refreshTokenStr := cookie.Value
 
-	user, err := h.repo.GetUserByRefreshToken(r.Context(), req.RefreshToken)
+	user, err := h.repo.GetUserByRefreshToken(r.Context(), refreshTokenStr)
 	if err != nil {
-		http.Error(w, "Refresh token inválido ou não encontrado", http.StatusUnauthorized)
+		http.Error(w, "Sessão inválida", http.StatusUnauthorized)
 		return
 	}
 
@@ -386,10 +404,45 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	newRefreshExpiresAt := time.Now().Add(7 * 24 * time.Hour)
 	_ = h.repo.SaveRefreshToken(r.Context(), user.ID, newRefreshToken, newRefreshExpiresAt)
 
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    newToken,
+		Path:     "/",
+		MaxAge:   7200,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    newRefreshToken,
+		Path:     "/",
+		MaxAge:   7 * 24 * 3600,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"token":         newToken,
-		"refresh_token": newRefreshToken,
+		"message": "Sessão renovada com sucesso!",
 	})
+}
+
+func isValidPassword(s string) bool {
+	if len(s) < 8 {
+		return false
+	}
+	var hasUpper, hasSpecial bool
+	for _, char := range s {
+		if unicode.IsUpper(char) {
+			hasUpper = true
+		}
+		if unicode.IsPunct(char) || unicode.IsSymbol(char) {
+			hasSpecial = true
+		}
+	}
+	return hasUpper && hasSpecial
 }

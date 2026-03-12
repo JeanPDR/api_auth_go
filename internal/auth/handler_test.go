@@ -54,7 +54,7 @@ func TestRegisterUser(t *testing.T) {
 	dummyMailer := &mailer.Mailer{}
 	handler := NewHandler(repo, dummyMailer)
 
-	t.Run("Deve retornar 400 se a senha for curta", func(t *testing.T) {
+	t.Run("Deve retornar 400 se a senha for curta ou fraca", func(t *testing.T) {
 		payload := []byte(`{"email":"teste@invalido.com", "password":"123"}`)
 		req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer(payload))
 		req.Header.Set("Content-Type", "application/json")
@@ -68,7 +68,8 @@ func TestRegisterUser(t *testing.T) {
 	})
 
 	t.Run("Deve retornar 201 ao cadastrar utilizador válido", func(t *testing.T) {
-		payload := []byte(`{"email":"novo_teste@exemplo.com", "password":"senha_forte_123"}`)
+		// 🚨 ATUALIZADO: Agora enviamos uma senha com Maiúscula e Caractere Especial
+		payload := []byte(`{"email":"novo_teste@exemplo.com", "password":"SenhaForte@123"}`)
 		req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer(payload))
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
@@ -88,8 +89,7 @@ func TestLoginUser(t *testing.T) {
 	dummyMailer := &mailer.Mailer{}
 	handler := NewHandler(repo, dummyMailer)
 
-	// Inserir um utilizador manualmente para o teste
-	hashedPassword, _ := HashPassword("senha_valida_123")
+	hashedPassword, _ := HashPassword("SenhaForte@123")
 	userNaoVerificado := &User{
 		Email:            "bloqueado@exemplo.com",
 		PasswordHash:     hashedPassword,
@@ -100,7 +100,7 @@ func TestLoginUser(t *testing.T) {
 	_ = repo.Create(context.Background(), userNaoVerificado)
 
 	t.Run("Deve bloquear login (403) se o e-mail não estiver verificado", func(t *testing.T) {
-		payload := []byte(`{"email":"bloqueado@exemplo.com", "password":"senha_valida_123"}`)
+		payload := []byte(`{"email":"bloqueado@exemplo.com", "password":"SenhaForte@123"}`)
 		req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewBuffer(payload))
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()

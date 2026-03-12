@@ -4,29 +4,23 @@ import (
 	"context"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
 type contextKey string
+
 const UserIDKey contextKey = "userID"
 
 func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Token ausente", http.StatusUnauthorized)
+		cookie, err := r.Cookie("access_token")
+		if err != nil {
+			http.Error(w, "Acesso negado: Token ausente", http.StatusUnauthorized)
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			http.Error(w, "Formato de token inválido", http.StatusUnauthorized)
-			return
-		}
-
-		tokenString := parts[1]
+		tokenString := cookie.Value
 		secret := os.Getenv("JWT_SECRET")
 
 		token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(t *jwt.Token) (interface{}, error) {
@@ -48,7 +42,7 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		ctx := context.WithValue(r.Context(), UserIDKey, claims.Subject)
-		
+
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
 }
