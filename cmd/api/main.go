@@ -31,6 +31,7 @@ func main() {
 
 	mux.HandleFunc("/register", authHandler.RegisterUser)
 	mux.HandleFunc("/login", authHandler.LoginUser)
+	mux.HandleFunc("/logout", authHandler.LogoutUser)
 	mux.HandleFunc("/refresh", authHandler.RefreshToken)
 	mux.HandleFunc("/verify", authHandler.VerifyEmail)
 	mux.HandleFunc("/verify/resend", authHandler.ResendVerificationCode)

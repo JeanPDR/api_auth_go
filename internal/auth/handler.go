@@ -38,7 +38,6 @@ type ResetPasswordRequest struct {
 	NewPassword string `json:"new_password"`
 }
 
-
 type Handler struct {
 	repo   *Repository
 	mailer *mailer.Mailer
@@ -165,7 +164,7 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   7200,
 		HttpOnly: true,
-		Secure:   true, 
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -173,7 +172,7 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 		Name:     "refresh_token",
 		Value:    refreshToken,
 		Path:     "/",
-		MaxAge:   7 * 24 * 3600, 
+		MaxAge:   7 * 24 * 3600,
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
@@ -445,4 +444,44 @@ func isValidPassword(s string) bool {
 		}
 	}
 	return hasUpper && hasSpecial
+}
+
+func (h *Handler) LogoutUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cookie, err := r.Cookie("refresh_token")
+	if err == nil {
+		refreshTokenStr := cookie.Value
+		user, err := h.repo.GetUserByRefreshToken(r.Context(), refreshTokenStr)
+		if err == nil {
+			_ = h.repo.SaveRefreshToken(r.Context(), user.ID, "", time.Now().Add(-1*time.Hour))
+		}
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"message": "Logout realizado com sucesso!"}`))
 }
