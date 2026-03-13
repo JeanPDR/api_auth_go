@@ -1,7 +1,7 @@
 <div align="center">
   <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/go/go-original.svg" height="120" alt="go logo"  />
 
-  # API de Autenticação Segura (SaaS)
+  # API de Autenticação Segura 
   
   *Um serviço robusto de autenticação e gestão de usuários, focado em segurança de alto nível para aplicações.*
 </div>
@@ -97,6 +97,8 @@ MAILERSEND_TEMPLATE_ID=seu_template_id_do_mailersend
 | `POST` | `/logout`                  | Invalida os tokens de sessão e limpa os cookies.                       |      Sim       |
 | `GET`  | `/dashboard`               | Exemplo de rota protegida.                                             |      Sim       |
 | `GET`  | `/me`                      | Retorna o status de autenticação do usuário.                           |      Sim       |
+
+Link da documentação da API -> https://docs-api-go.jeanpreis.com.br/
 
 ## ☁️ Infraestrutura e Deploy (CI/CD)
 
