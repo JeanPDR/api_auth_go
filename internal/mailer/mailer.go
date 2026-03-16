@@ -10,18 +10,20 @@ import (
 )
 
 type Mailer struct {
-	APIKey     string
-	FromEmail  string
-	FromName   string
-	TemplateID string
+	APIKey          string
+	FromEmail       string
+	FromName        string
+	TemplateID      string
+	ResetTemplateID string
 }
 
 func NewMailer() *Mailer {
 	return &Mailer{
-		APIKey:     os.Getenv("MAILERSEND_API_KEY"),
-		FromEmail:  os.Getenv("MAILERSEND_FROM_EMAIL"),
-		FromName:   os.Getenv("MAILERSEND_FROM_NAME"),
-		TemplateID: os.Getenv("MAILERSEND_TEMPLATE_ID"),
+		APIKey:          os.Getenv("MAILERSEND_API_KEY"),
+		FromEmail:       os.Getenv("MAILERSEND_FROM_EMAIL"),
+		FromName:        os.Getenv("MAILERSEND_FROM_NAME"),
+		TemplateID:      os.Getenv("MAILERSEND_TEMPLATE_ID"),
+		ResetTemplateID: os.Getenv("MAILERSEND_RESET_TEMPLATE_ID"),
 	}
 }
 
@@ -88,8 +90,8 @@ func (m *Mailer) SendPasswordResetCode(toEmail string, code string) error {
 		"to": []map[string]string{
 			{"email": toEmail},
 		},
-		"subject":     "Recuperação de Palavra-passe", // Assunto diferente!
-		"template_id": m.TemplateID, // Vamos reaproveitar o mesmo template visual
+		"subject":     "Recuperação de Senha",
+		"template_id": m.ResetTemplateID,
 		"personalization": []map[string]interface{}{
 			{
 				"email": toEmail,
